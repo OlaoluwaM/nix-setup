@@ -313,6 +313,13 @@ let
       group = "Session";
     })
 
+    (mkDef {
+      keys = "CTRL + ${mod} + O";
+      dsp = execDispatcher "${silereIpc} calendar toggle";
+      desc = "Toggle the calendar";
+      group = "Session";
+    })
+
     # -- Windows -----------------------------------------------------------
     # Vicinae's window switcher replaces the dynamic Alt+Tab binds from the
     # disabled hyprshell module. Unlike hyprshell's hold-and-cycle switcher,
