@@ -1,0 +1,224 @@
+Subject: avoid delayed profile catch-up after suspend
+
+Local fix against hyprsunset v0.3.3; not an upstream backport.
+Upstream issue: https://github.com/hyprwm/hyprsunset/issues/55
+Earlier workaround: https://github.com/hyprwm/hyprsunset/pull/59
+Merge: 72071709f58bc2fed8546288af295aa9153a287f
+
+PR #59 added the one-minute polling loop, limiting the delay without
+eliminating it. The v0.4.0 scheduler still has that loop and sleep_until;
+a version bump to v0.4.0 alone does not replace this patch. Reassess the
+scheduler and CMake test wiring when updating the pinned package.
+
+Use an absolute realtime deadline and preserve profile selection after
+it expires. Native timer tests pass; physical suspend/resume acceptance
+has not been performed. On a non-EINTR wait error, automatic scheduling
+stops until restart while the daemon and manual IPC remain available.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d079a8e..319ac7c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -125,6 +125,21 @@ target_link_libraries(hyprsunset PkgConfig::deps)
+ target_link_libraries(hyprsunset pthread ${CMAKE_THREAD_LIBS_INIT}
+                       wayland-cursor)
+ 
++option(BUILD_TESTING "Build tests" OFF)
++if(BUILD_TESTING)
++  enable_testing()
++
++  add_executable(hyprsunset-schedule-tests tests/Schedule.cpp)
++  target_link_libraries(hyprsunset-schedule-tests rt)
++  add_test(NAME schedule COMMAND hyprsunset-schedule-tests)
++
++  add_executable(hyprsunset-schedule-errors-tests tests/ScheduleErrors.cpp)
++  target_link_options(hyprsunset-schedule-errors-tests
++                      PRIVATE "-Wl,--wrap=clock_nanosleep")
++  target_link_libraries(hyprsunset-schedule-errors-tests rt)
++  add_test(NAME schedule-errors COMMAND hyprsunset-schedule-errors-tests)
++endif()
++
+ if(CMAKE_BUILD_TYPE MATCHES Debug OR CMAKE_BUILD_TYPE MATCHES DEBUG)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -no-pie -fno-builtin")
+   set(CMAKE_EXE_LINKER_FLAGS
+diff --git a/src/Hyprsunset.cpp b/src/Hyprsunset.cpp
+index eace291..4e76946 100644
+--- a/src/Hyprsunset.cpp
++++ b/src/Hyprsunset.cpp
+@@ -1,5 +1,6 @@
+ #include "ConfigManager.hpp"
+ #include "helpers/Log.hpp"
++#include "helpers/Schedule.hpp"
+ #include "IPCSocket.hpp"
+ #include <cstring>
+ #include <mutex>
+@@ -344,13 +345,16 @@ void CHyprsunset::schedule() {
+ 
+             if (now >= time)
+                 time += std::chrono::days(1);
+-            
+-            while (time >= std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::system_clock::now()).get_local_time() + std::chrono::minutes(1))
+-                std::this_thread::sleep_for(std::chrono::minutes(1));
+-            
++
+             auto system_time = std::chrono::zoned_time{std::chrono::current_zone(), time}.get_sys_time();
+ 
+-            std::this_thread::sleep_until(system_time);
++            // An absolute realtime deadline advances through suspend, so a
++            // missed transition is ready as soon as the machine resumes.
++            const int waitError = Hyprsunset::Schedule::waitUntil(system_time);
++            if (waitError != 0) {
++                Debug::log(ERR, "✖ Failed to wait for the next scheduled profile: {}", strerror(waitError));
++                break;
++            }
+ 
+             int newcurrent = currentProfile();
+             if (newcurrent == -1)
+diff --git a/src/helpers/Schedule.hpp b/src/helpers/Schedule.hpp
+new file mode 100644
+index 0000000..f6bb995
+--- /dev/null
++++ b/src/helpers/Schedule.hpp
+@@ -0,0 +1,24 @@
++#pragma once
++
++#include <cerrno>
++#include <chrono>
++#include <ctime>
++
++namespace Hyprsunset::Schedule {
++    template <typename Duration>
++    int waitUntil(const std::chrono::time_point<std::chrono::system_clock, Duration>& deadline) {
++        const auto sinceEpoch   = deadline.time_since_epoch();
++        const auto wholeSeconds = std::chrono::floor<std::chrono::seconds>(sinceEpoch);
++        const timespec timeout{
++            .tv_sec  = static_cast<time_t>(wholeSeconds.count()),
++            .tv_nsec = static_cast<long>(std::chrono::duration_cast<std::chrono::nanoseconds>(sinceEpoch - wholeSeconds).count()),
++        };
++
++        int result = 0;
++        do {
++            result = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timeout, nullptr);
++        } while (result == EINTR);
++
++        return result;
++    }
++}
+diff --git a/tests/Schedule.cpp b/tests/Schedule.cpp
+new file mode 100644
+index 0000000..623d375
+--- /dev/null
++++ b/tests/Schedule.cpp
+@@ -0,0 +1,51 @@
++#include "../src/helpers/Schedule.hpp"
++
++#include <csignal>
++#include <iostream>
++#include <sys/time.h>
++
++using namespace std::chrono_literals;
++
++static volatile std::sig_atomic_t alarmCount = 0;
++
++static void handleAlarm(int) {
++    alarmCount = 1;
++}
++
++static bool expect(bool condition, const char* message) {
++    if (condition)
++        return true;
++
++    std::cerr << message << '\n';
++    return false;
++}
++
++int main() {
++    bool success = true;
++
++    auto start = std::chrono::steady_clock::now();
++    success &= expect(Hyprsunset::Schedule::waitUntil(std::chrono::system_clock::now() - 1s) == 0, "past deadline returned an error");
++    success &= expect(std::chrono::steady_clock::now() - start < 1s, "past deadline did not return promptly");
++
++    start = std::chrono::steady_clock::now();
++    success &= expect(Hyprsunset::Schedule::waitUntil(std::chrono::system_clock::now() + 50ms) == 0, "future deadline returned an error");
++    success &= expect(std::chrono::steady_clock::now() - start >= 40ms, "future deadline returned too early");
++
++    struct sigaction action {};
++    struct sigaction oldAction {};
++    action.sa_handler = handleAlarm;
++    sigemptyset(&action.sa_mask);
++    success &= expect(sigaction(SIGALRM, &action, &oldAction) == 0, "failed to install SIGALRM handler");
++
++    itimerval timer {};
++    timer.it_value.tv_usec = 30000;
++    success &= expect(setitimer(ITIMER_REAL, &timer, nullptr) == 0, "failed to arm SIGALRM timer");
++
++    start = std::chrono::steady_clock::now();
++    success &= expect(Hyprsunset::Schedule::waitUntil(std::chrono::system_clock::now() + 200ms) == 0, "interrupted deadline returned an error");
++    success &= expect(alarmCount == 1, "SIGALRM did not interrupt the wait");
++    success &= expect(std::chrono::steady_clock::now() - start >= 175ms, "interrupted wait did not retain its original deadline");
++    success &= expect(sigaction(SIGALRM, &oldAction, nullptr) == 0, "failed to restore SIGALRM handler");
++
++    return success ? 0 : 1;
++}
+diff --git a/tests/ScheduleErrors.cpp b/tests/ScheduleErrors.cpp
+new file mode 100644
+index 0000000..a43b053
+--- /dev/null
++++ b/tests/ScheduleErrors.cpp
+@@ -0,0 +1,55 @@
++#include "../src/helpers/Schedule.hpp"
++
++#include <cerrno>
++#include <cstring>
++#include <iostream>
++
++static int      calls;
++static int      resultToReturn;
++static clockid_t capturedClock;
++static int      capturedFlags;
++static timespec firstDeadline;
++static bool     deadlineChanged;
++
++extern "C" int __wrap_clock_nanosleep(clockid_t clock, int flags, const timespec* deadline, timespec*) {
++    capturedClock = clock;
++    capturedFlags = flags;
++
++    if (calls == 0)
++        firstDeadline = *deadline;
++    else
++        deadlineChanged = deadlineChanged || std::memcmp(&firstDeadline, deadline, sizeof(timespec)) != 0;
++
++    ++calls;
++    if (resultToReturn == EINTR && calls == 1)
++        return EINTR;
++    return resultToReturn == EINTR ? 0 : resultToReturn;
++}
++
++static bool expect(bool condition, const char* message) {
++    if (condition)
++        return true;
++
++    std::cerr << message << '\n';
++    return false;
++}
++
++int main() {
++    bool success = true;
++
++    resultToReturn = EINTR;
++    const int interruptedResult = Hyprsunset::Schedule::waitUntil(std::chrono::system_clock::now());
++    success &= expect(interruptedResult == 0, "EINTR retry did not return success");
++    success &= expect(calls == 2, "EINTR did not cause exactly one retry");
++    success &= expect(!deadlineChanged, "EINTR retry changed the absolute deadline");
++    success &= expect(capturedClock == CLOCK_REALTIME, "wait did not use CLOCK_REALTIME");
++    success &= expect(capturedFlags == TIMER_ABSTIME, "wait did not use an absolute deadline");
++
++    calls          = 0;
++    resultToReturn = EINVAL;
++    const int errorResult = Hyprsunset::Schedule::waitUntil(std::chrono::system_clock::now());
++    success &= expect(errorResult == EINVAL, "non-EINTR error was not returned");
++    success &= expect(calls == 1, "non-EINTR error caused another syscall");
++
++    return success ? 0 : 1;
++}

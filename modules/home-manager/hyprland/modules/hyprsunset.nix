@@ -1,11 +1,22 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
 let
   cfg = config.local.hyprland;
+
+  hyprsunsetPackage = pkgs.hyprsunset.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ./hyprsunset-realtime-schedule.patch
+    ];
+    cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+      "-DBUILD_TESTING=ON"
+    ];
+    doCheck = true;
+  });
 in
 {
   config = lib.mkIf cfg.enable {
@@ -22,6 +33,7 @@ in
     # jumping straight to 2467K.
     services.hyprsunset = {
       enable = true;
+      package = hyprsunsetPackage;
       systemdTarget = config.wayland.systemd.target;
       settings = {
         profile = [
