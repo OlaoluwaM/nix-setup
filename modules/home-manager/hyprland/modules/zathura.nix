@@ -54,6 +54,7 @@ in
         "<C-S-g>" = "search backward";
         n = "navigate next";
         p = "navigate previous";
+        e = ''exec "papers --page-index=$PAGE '$FILE'"'';
       };
     };
   };
