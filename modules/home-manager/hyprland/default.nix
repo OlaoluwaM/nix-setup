@@ -253,6 +253,13 @@ in
         "audio/mp4"
         "audio/x-wav"
       ] (_: "com.github.neithern.g4music.desktop")
+      // lib.genAttrs [
+        "text/plain"
+        "text/x-log"
+        "text/markdown"
+        "text/x-markdown"
+        "application/json"
+      ] (_: "org.gnome.TextEditor.desktop")
       // {
         "application/pdf" = "org.pwmt.zathura-pdf-mupdf.desktop";
         "inode/directory" = "org.gnome.Nautilus.desktop";
