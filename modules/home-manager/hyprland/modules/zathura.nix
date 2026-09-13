@@ -10,10 +10,10 @@ let
   theme = config.local.theme.colors;
 
   # Fallback colors before the first Matugen palette is generated.
-  pageBackground = "rgba(0, 0, 0, 0.55)";
+  viewerBackground = "rgba(0, 0, 0, 0.80)";
   # Use neutral near-white for document text to improve reading contrast.
   pageForeground = "#f5f5f5";
-  # Keep transient controls more opaque than the document surface.
+  # Give transient controls their own background.
   controlBackground = "rgba(0, 0, 0, 0.78)";
   transparentBackground = "rgba(0, 0, 0, 0)";
 in
@@ -30,19 +30,18 @@ in
         "selection-clipboard" = "clipboard";
         guioptions = "s"; # Show the statusbar by default. The inputbar can always be shown when needed.
 
-        # Recolor maps the document's light pixels to a tinted surface and its
+        # Recolor maps the document's light pixels to a clear surface and its
         # dark pixels to opaque text. App-provided alpha lets Hyprland blur the
         # wallpaper without reducing glyph opacity.
         recolor = true;
-        "recolor-lightcolor" = pageBackground;
+        "recolor-lightcolor" = transparentBackground;
         "recolor-darkcolor" = pageForeground;
         "recolor-keephue" = true;
         # Preserve embedded photographs while recoloring the page and text.
         "recolor-reverse-video" = true;
 
-        # The fallback uses a clear backing surface; Matugen overrides these
-        # colors with its translucent on_primary background below.
-        "default-bg" = transparentBackground;
+        # Tint the whole viewer once so the PDF and its margins share a surface.
+        "default-bg" = viewerBackground;
         "default-fg" = theme.text;
         "inputbar-bg" = controlBackground;
         "inputbar-fg" = theme.text;
@@ -64,10 +63,15 @@ in
 
     # Adapted from InioX/matugen-themes/templates/zathura-colors. Keep the
     # generated palette separate from Home Manager's settings and mappings.
+    # Apply tint only to the viewer to avoid a rectangle at the page edge.
+    # 0.85 keeps some frost while reducing wallpaper interference.
+    # For more legibility, raise default-bg's alpha to 0.90; 1.0 is opaque.
+    # Keep recolor-lightcolor's alpha at 0.0 to avoid restoring the page edge.
+    # viewerBackground above only controls the fallback palette.
     xdg.configFile."matugen/templates/zathura-colors".text = ''
-      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.55}}"
+      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.85}}"
       set default-fg "{{colors.primary.default.hex}}"
-      set recolor-lightcolor "{{colors.on_primary.default.rgba | set_alpha: 0.55}}"
+      set recolor-lightcolor "{{colors.on_primary.default.rgba | set_alpha: 0.0}}"
       set recolor-darkcolor "{{colors.primary.default.hex}}"
       set statusbar-bg "{{colors.on_primary.default.hex}}"
       set statusbar-fg "{{colors.primary.default.hex}}"

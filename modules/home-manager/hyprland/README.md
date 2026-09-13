@@ -132,11 +132,27 @@ The picker can be opened with `Super+Shift+W`. It can also be found as
 
 Zathura also uses Matugen's dark `SchemeTonalSpot` palette. Home Manager
 generates its initial colors from the saved wallpaper, and `wallpaper-set`
-updates them on later picks. Reopen Zathura to read the updated colors.
-Its `on_primary` backgrounds use 55% opacity, with opaque `primary` text;
-document hues and embedded image colors remain enabled. Matugen writes
+updates them on later picks. A Matugen post-hook reloads the configuration
+of each running Zathura instance through D-Bus, so open PDFs update without
+restarting the viewer. You can also run `:source` inside Zathura to reload
+its configuration manually.
+Its shared `on_primary` viewer background uses 85% opacity. The PDF page
+background is clear so it adds no rectangular tint over the viewer, while
+`primary` text stays opaque. Document hues and embedded image colors remain
+enabled. Matugen writes
 `~/.config/zathura/matugen-colors`, which the Home Manager configuration
 includes after its fallback colors.
+
+To improve Zathura's legibility, increase `set_alpha` on the Matugen
+template's `set default-bg` line in `modules/zathura.nix`. Try `0.90` for
+less wallpaper interference; `1.0` makes the background fully opaque.
+Lower values show more frost. Keep `recolor-lightcolor` at alpha `0.0` so
+the page does not regain a separate rectangular tint. The `viewerBackground`
+variable near the top of the module only controls the fallback palette.
+
+Apply the Home Manager configuration to install the changed template and
+regenerate the palette. Run `:source` in an already-open Zathura window to
+load it. Later wallpaper picks regenerate and reload the palette automatically.
 
 ## Other Desktop Support
 

@@ -42,6 +42,28 @@ let
     type = "SchemeTonalSpot";
   };
 
+  zathuraReloadTheme = pkgs.writeShellApplication {
+    name = "zathura-reload-theme";
+    runtimeInputs = [ pkgs.systemd ];
+    text = ''
+      # Reload each running viewer through its native configuration API.
+      # A missing session bus or an instance closing must not fail wallpaper-set.
+      if ! names="$(busctl --user --no-pager --no-legend --acquired list)"; then
+        exit 0
+      fi
+      while read -r name _; do
+        case "$name" in
+          org.pwmt.zathura.PID-*)
+            if ! busctl --user --timeout=2 call "$name" /org/pwmt/zathura \
+              org.pwmt.zathura SourceConfig > /dev/null; then
+              echo "zathura-reload-theme: could not reload $name" >&2
+            fi
+            ;;
+        esac
+      done <<< "$names"
+    '';
+  };
+
   # Initialize Zathura without running the shell or Vicinae templates/hooks.
   zathuraMatugenConfig = (pkgs.formats.toml { }).generate "zathura-matugen-config.toml" {
     config = {
@@ -78,7 +100,9 @@ let
       type = "SchemeTonalSpot";
     };
 
-    templates.zathura = zathuraMatugenTemplate;
+    templates.zathura = zathuraMatugenTemplate // {
+      post_hook = lib.getExe zathuraReloadTheme;
+    };
   };
 
   wallpaperSetScript = pkgs.writeShellApplication {
