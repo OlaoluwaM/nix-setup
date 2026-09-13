@@ -185,6 +185,7 @@ in
     gcc
     glmark2
     gnumake
+    gnome-text-editor
     google-chrome
 
     haskellPackages.threadscope
