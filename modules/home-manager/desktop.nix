@@ -74,6 +74,14 @@ in
       xdg.mimeApps = {
         enable = true;
 
+        # Exclude Readest from the default associations for these MIME types
+        associations.removed = lib.genAttrs [
+          "text/plain"
+          "text/markdown"
+          "application/pdf"
+          "application/epub+zip"
+        ] (_: [ "com.bilingify.readest.desktop" ]);
+
         defaultApplications =
           # Firefox owns web content and the browser scheme handlers. It is
           # installed system-wide by the NixOS config (programs.firefox.enable).
