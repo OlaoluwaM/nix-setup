@@ -35,6 +35,22 @@ let
   # script below).
   placeholderWallpaper = pkgs.nixos-artwork.wallpapers.nineish-dark-gray.gnomeFilePath;
 
+  zathuraMatugenTemplate = {
+    input_path = "${config.xdg.configFile."matugen/templates/zathura-colors".source}";
+    output_path = "${config.xdg.configHome}/zathura/matugen-colors";
+    mode = "Dark";
+    type = "SchemeTonalSpot";
+  };
+
+  # Initialize Zathura without running the shell or Vicinae templates/hooks.
+  zathuraMatugenConfig = (pkgs.formats.toml { }).generate "zathura-matugen-config.toml" {
+    config = {
+      caching = false;
+      version_check = false;
+    };
+    templates.zathura = zathuraMatugenTemplate;
+  };
+
   matugenConfig = (pkgs.formats.toml { }).generate "matugen-config.toml" {
     config = {
       # Matugen would still rebuild the SchemeContent palette for this
@@ -61,6 +77,8 @@ let
       mode = "Dark";
       type = "SchemeTonalSpot";
     };
+
+    templates.zathura = zathuraMatugenTemplate;
   };
 
   wallpaperSetScript = pkgs.writeShellApplication {
@@ -99,6 +117,13 @@ in
         run cp $VERBOSE_ARG "${placeholderWallpaper}" "${cfg.wallpaper}"
         run chmod $VERBOSE_ARG u+w "${cfg.wallpaper}"
       fi
+    '';
+
+    # Refresh the palette on activation as well as wallpaper changes, so a
+    # new installation or template update is ready when Zathura next opens.
+    home.activation.zathuraMatugen = lib.hm.dag.entryAfter [ "silereWallpaperSeed" ] ''
+      run ${lib.getExe unstable.matugen} --config ${zathuraMatugenConfig} \
+        image ${lib.escapeShellArg cfg.wallpaper} --source-color-index 0 -q
     '';
 
     # Replaces the fork installer's role here (scripts/install.sh normally

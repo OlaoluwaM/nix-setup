@@ -42,6 +42,7 @@ Each file has one main job:
   default shell settings into the package.
 - `modules/wallpaper.nix` joins awww, Matugen, and hyprlock into one wallpaper
   system.
+- `modules/zathura.nix` configures the PDF viewer and its Matugen glass theme.
 - `scripts/` holds the Bash code used by the helper commands.
 - `../vicinae.nix` sets up Vicinae and starts it with this desktop.
 
@@ -128,6 +129,14 @@ files without making this wallpaper path faster.
 
 The picker can be opened with `Super+Shift+W`. It can also be found as
 `Wallpapers` in Vicinae.
+
+Zathura also uses Matugen's dark `SchemeTonalSpot` palette. Home Manager
+generates its initial colors from the saved wallpaper, and `wallpaper-set`
+updates them on later picks. Reopen Zathura to read the updated colors.
+Its `on_primary` backgrounds use 55% opacity, with opaque `primary` text;
+document hues and embedded image colors remain enabled. Matugen writes
+`~/.config/zathura/matugen-colors`, which the Home Manager configuration
+includes after its fallback colors.
 
 ## Other Desktop Support
 
