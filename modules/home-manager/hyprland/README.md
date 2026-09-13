@@ -154,6 +154,11 @@ Apply the Home Manager configuration to install the changed template and
 regenerate the palette. Run `:source` in an already-open Zathura window to
 load it. Later wallpaper picks regenerate and reload the palette automatically.
 
+The Zathura package carries a small thumbnail transparency patch so cached
+page previews keep their alpha during palette changes. Its build checks
+compare thumbnail compositing with full-page compositing for transparent,
+translucent, and opaque pixels.
+
 ## Other Desktop Support
 
 - Nautilus opens folders.

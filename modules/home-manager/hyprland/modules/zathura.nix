@@ -9,6 +9,16 @@ let
   cfg = config.local.hyprland;
   theme = config.local.theme.colors;
 
+  # Upstream's cached thumbnails drop alpha and flash black during recoloring.
+  zathuraCore = pkgs.zathuraPkgs.zathura_core.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./zathura-thumbnail-transparency.patch ];
+    doCheck = true;
+    postCheck = (old.postCheck or "") + ''
+      ${lib.getExe pkgs.python3} ${../tests/zathura-thumbnail-transparency.py} \
+        "$NIX_BUILD_TOP/$sourceRoot/zathura/page-widget.c"
+    '';
+  });
+
   # Fallback colors before the first Matugen palette is generated.
   viewerBackground = "rgba(0, 0, 0, 0.80)";
   # Use neutral near-white for document text to improve reading contrast.
@@ -23,7 +33,10 @@ in
       enable = true;
 
       # Keep PDF rendering independent of Papers' Poppler/GTK path.
-      package = pkgs.zathura.override { useMupdf = true; };
+      package = pkgs.zathura.override {
+        useMupdf = true;
+        zathura_core = zathuraCore;
+      };
 
       options = {
         "adjust-open" = "best-fit";
@@ -69,7 +82,7 @@ in
     # Keep recolor-lightcolor's alpha at 0.0 to avoid restoring the page edge.
     # viewerBackground above only controls the fallback palette.
     xdg.configFile."matugen/templates/zathura-colors".text = ''
-      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.85}}"
+      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.80}}"
       set default-fg "{{colors.primary.default.hex}}"
       set recolor-lightcolor "{{colors.on_primary.default.rgba | set_alpha: 0.0}}"
       set recolor-darkcolor "{{colors.primary.default.hex}}"
