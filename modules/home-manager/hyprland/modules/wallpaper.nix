@@ -39,7 +39,7 @@ let
     input_path = "${config.xdg.configFile."matugen/templates/zathura-colors".source}";
     output_path = "${config.xdg.configHome}/zathura/matugen-colors";
     mode = "Dark";
-    type = "SchemeTonalSpot";
+    type = "SchemeMonochrome";
   };
 
   zathuraReloadTheme = pkgs.writeShellApplication {

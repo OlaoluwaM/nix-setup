@@ -67,7 +67,7 @@ in
       # Custom keybindings. If you want to restore the default bindings for something, just remove the custom binding from here
       mappings = {
         "<C-g>" = "search forward";
-        "<C-S-g>" = "search backward";
+        "<C-G>" = "search backward";
         n = "navigate next";
         p = "navigate previous";
         e = ''exec "papers --page-index=$PAGE '$FILE'"'';
@@ -82,7 +82,7 @@ in
     # Keep recolor-lightcolor's alpha at 0.0 to avoid restoring the page edge.
     # viewerBackground above only controls the fallback palette.
     xdg.configFile."matugen/templates/zathura-colors".text = ''
-      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.80}}"
+      set default-bg "{{colors.on_primary.default.rgba | set_alpha: 0.70}}"
       set default-fg "{{colors.primary.default.hex}}"
       set recolor-lightcolor "{{colors.on_primary.default.rgba | set_alpha: 0.0}}"
       set recolor-darkcolor "{{colors.primary.default.hex}}"
@@ -102,8 +102,8 @@ in
       set notification-error-fg "{{colors.error.default.hex}}"
       set notification-warning-bg "{{colors.primary_fixed.default.hex}}"
       set notification-warning-fg "{{colors.error_container.default.hex}}"
-      set highlight-color "{{colors.primary_fixed.default.hex}}"
-      set highlight-active-color "{{colors.primary_fixed_dim.default.hex}}"
+      set highlight-color "{{colors.primary_fixed.default.rgba | set_alpha: 0.5}}"
+      set highlight-active-color "{{colors.primary_fixed_dim.default.rgba | set_alpha: 0.5}}"
     '';
 
     # extraConfig is emitted before options, so append the include here to
